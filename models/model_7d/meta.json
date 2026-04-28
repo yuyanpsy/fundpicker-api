@@ -1,0 +1,97 @@
+{
+  "horizon": 7,
+  "feature_names": [
+    "return_5d",
+    "return_10d",
+    "return_20d",
+    "return_60d",
+    "return_1d",
+    "log_return_1d",
+    "ma_5",
+    "nav_over_ma_5",
+    "ma_10",
+    "nav_over_ma_10",
+    "ma_20",
+    "nav_over_ma_20",
+    "ma_60",
+    "nav_over_ma_60",
+    "ma_5_over_20",
+    "ma_10_over_60",
+    "volatility_5d",
+    "volatility_10d",
+    "volatility_20d",
+    "volatility_60d",
+    "momentum_5d",
+    "momentum_10d",
+    "momentum_20d",
+    "momentum_60d",
+    "momentum_accel",
+    "rsi_6",
+    "rsi_14",
+    "rsi_28",
+    "macd",
+    "macd_signal",
+    "macd_hist",
+    "boll_upper",
+    "boll_lower",
+    "boll_width",
+    "boll_position",
+    "drawdown_20d",
+    "drawdown_60d",
+    "trend_consistency"
+  ],
+  "metrics": {
+    "horizon": 7,
+    "n_samples": 261582,
+    "n_features": 38,
+    "n_funds": 200,
+    "positive_ratio": 0.5331827113486401,
+    "gb_avg_auc": 0.6527507820129531,
+    "gb_avg_acc": 0.6047847328944652,
+    "rf_avg_auc": 0.6339400874290584,
+    "rf_avg_acc": 0.5882285478358604,
+    "trained_at": "2026-04-28T12:20:18.788668",
+    "feature_importance_top10": [
+      [
+        "volatility_60d",
+        0.09128187532447078
+      ],
+      [
+        "volatility_10d",
+        0.09109106551636793
+      ],
+      [
+        "volatility_20d",
+        0.07538313556725716
+      ],
+      [
+        "rsi_28",
+        0.07240262100397472
+      ],
+      [
+        "rsi_14",
+        0.056510629338638534
+      ],
+      [
+        "boll_width",
+        0.0472798671167347
+      ],
+      [
+        "return_60d",
+        0.04287547457749822
+      ],
+      [
+        "momentum_60d",
+        0.04118532538668839
+      ],
+      [
+        "volatility_5d",
+        0.0374658771864852
+      ],
+      [
+        "momentum_accel",
+        0.03410034783386852
+      ]
+    ]
+  }
+}
