@@ -13,6 +13,7 @@ from model_trainer import FundPredictor
 from data_collector import (load_nav_data, fetch_fund_nav_from_pingzhongdata,
                             save_single_nav, fetch_fund_rank, DATA_DIR)
 from feature_engineering import compute_features
+from supabase_store import save_predictions, load_predictions
 
 app = FastAPI(title="FundPicker AI API", version="3.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -33,11 +34,20 @@ prediction_cache = {
     "top10": [],
     "all_predictions": {},
     "last_update": None,
-    "status": "idle",  # idle / running / done
+    "status": "idle",
     "progress": 0,
     "total": 0
 }
 cache_lock = threading.Lock()
+
+# 启动时从Supabase加载上次的预测结果
+_top10, _all_preds, _updated = load_predictions()
+if _top10:
+    prediction_cache["top10"] = _top10
+    prediction_cache["all_predictions"] = _all_preds
+    prediction_cache["last_update"] = _updated
+    prediction_cache["status"] = "done"
+    print(f"从Supabase恢复: {len(_top10)}只TOP10, {len(_all_preds)}只全量")
 
 
 def ensure_fund_data(code: str) -> bool:
@@ -122,6 +132,9 @@ def background_batch_predict():
             prediction_cache["status"] = "done"
             prediction_cache["last_update"] = datetime.now().isoformat()
             print(f"批量预测完成: {len(results)}/{len(codes)} 只基金")
+
+        # 持久化到Supabase
+        save_predictions(prediction_cache["top10"], results)
 
     except Exception as e:
         print(f"批量预测失败: {e}")
