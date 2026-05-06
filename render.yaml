@@ -9,14 +9,14 @@ services:
       - key: PYTHON_VERSION
         value: "3.11"
 
-  # Cron job: 每30分钟唤醒一次，确保预测持续运行
+  # Cron job: 每5分钟唤醒Render，确保预测持续运行直到完成
   - type: cron
     name: fundpicker-keepalive
     runtime: python
     plan: free
-    schedule: "*/30 * * * *"
+    schedule: "*/5 * * * *"
     buildCommand: pip install requests
-    startCommand: python -c "import requests; r=requests.get('https://fundpicker-api.onrender.com/trigger-update', timeout=10); print(r.json())"
+    startCommand: python -c "import requests,sys; r=requests.get('https://fundpicker-api.onrender.com/trigger-update',timeout=30); print(r.text[:200]); sys.exit(0)"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
