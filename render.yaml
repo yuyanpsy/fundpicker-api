@@ -4,7 +4,19 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: cd app && python api_server.py
+    startCommand: cd app && uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # Cron job: 每30分钟唤醒一次，确保预测持续运行
+  - type: cron
+    name: fundpicker-keepalive
+    runtime: python
+    plan: free
+    schedule: "*/30 * * * *"
+    buildCommand: pip install requests
+    startCommand: python -c "import requests; r=requests.get('https://fundpicker-api.onrender.com/trigger-update', timeout=10); print(r.json())"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"

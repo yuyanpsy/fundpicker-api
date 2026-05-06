@@ -62,7 +62,7 @@ def ensure_fund_data(code: str) -> bool:
 
 
 def background_batch_predict():
-    """后台批量预测（在线程中运行）"""
+    """后台批量预测（在线程中运行）— 预测10000只基金"""
     global prediction_cache
     with cache_lock:
         if prediction_cache["status"] == "running":
@@ -71,16 +71,33 @@ def background_batch_predict():
         prediction_cache["progress"] = 0
 
     try:
-        # 获取排行榜前500只基金
-        rank_df = fetch_fund_rank("all", 500)
-        if rank_df is None or len(rank_df) == 0:
+        # 获取多种类型基金，总计约10000只
+        all_codes = []
+        code_names = {}  # code -> name 映射
+
+        for fund_type, size in [("all", 3000), ("gp", 3000), ("hh", 2000), ("zs", 2000)]:
+            try:
+                rank_df = fetch_fund_rank(fund_type, size)
+                if rank_df is not None and len(rank_df) > 0:
+                    for _, row in rank_df.iterrows():
+                        code = row["code"]
+                        if code not in code_names:
+                            all_codes.append(code)
+                            code_names[code] = row.get("name", code)
+                    print(f"获取{fund_type}类型: {len(rank_df)}只, 累计去重: {len(all_codes)}只")
+            except Exception as e:
+                print(f"获取{fund_type}排行失败: {e}")
+            time.sleep(1)
+
+        if not all_codes:
             with cache_lock:
                 prediction_cache["status"] = "idle"
             return
 
-        codes = rank_df["code"].tolist()
+        # 限制最多10000只
+        all_codes = all_codes[:10000]
         with cache_lock:
-            prediction_cache["total"] = len(codes)
+            prediction_cache["total"] = len(all_codes)
 
         predictor = predictors.get(30)
         if not predictor:
@@ -88,10 +105,23 @@ def background_batch_predict():
                 prediction_cache["status"] = "idle"
             return
 
-        results = {}
-        for i, code in enumerate(codes):
+        # 加载已有预测结果（增量更新）
+        results = dict(prediction_cache.get("all_predictions", {}))
+        print(f"开始批量预测: {len(all_codes)}只基金 (已有{len(results)}只)")
+
+        for i, code in enumerate(all_codes):
+            # 跳过已预测的（24小时内）
+            if code in results and prediction_cache.get("last_update"):
+                try:
+                    last = datetime.fromisoformat(prediction_cache["last_update"])
+                    if (datetime.now() - last).total_seconds() < 72000:  # 20小时内
+                        with cache_lock:
+                            prediction_cache["progress"] = i + 1
+                        continue
+                except:
+                    pass
+
             try:
-                # 获取数据
                 df = load_nav_data(code)
                 if df is None or len(df) < 60:
                     df = fetch_fund_nav_from_pingzhongdata(code)
@@ -100,14 +130,10 @@ def background_batch_predict():
                     else:
                         continue
 
-                # 预测
                 pred = predictor.predict(code)
                 if "error" not in pred:
-                    # 从排行榜获取基金名称
-                    row = rank_df[rank_df["code"] == code]
-                    name = row.iloc[0]["name"] if len(row) > 0 else code
                     results[code] = {
-                        "name": name,
+                        "name": code_names.get(code, code),
                         "probability": pred["probability"],
                         "confidence": pred["confidence"],
                         "factors": pred["factors"][:3]
@@ -117,8 +143,8 @@ def background_batch_predict():
 
             with cache_lock:
                 prediction_cache["progress"] = i + 1
-                # 每50只更新一次TOP10
-                if (i + 1) % 50 == 0 or i == len(codes) - 1:
+                # 每100只更新一次TOP10和保存
+                if (i + 1) % 100 == 0 or i == len(all_codes) - 1:
                     top10 = sorted(results.items(),
                                    key=lambda x: x[1]["probability"], reverse=True)[:10]
                     prediction_cache["top10"] = [
@@ -126,7 +152,15 @@ def background_batch_predict():
                     ]
                     prediction_cache["all_predictions"] = results
 
-            time.sleep(0.3)  # 限流
+                # 每500只持久化一次到Supabase
+                if (i + 1) % 500 == 0:
+                    try:
+                        save_predictions(prediction_cache["top10"], results)
+                        print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 已保存")
+                    except:
+                        pass
+
+            time.sleep(0.2)  # 限流
 
         with cache_lock:
             prediction_cache["status"] = "done"
@@ -145,12 +179,21 @@ def background_batch_predict():
 @app.get("/")
 def root():
     return {
-        "service": "FundPicker AI API v3",
+        "service": "FundPicker AI API v3 (10000基金)",
         "models": list(predictors.keys()),
         "cache_status": prediction_cache["status"],
         "cache_progress": f"{prediction_cache['progress']}/{prediction_cache['total']}",
+        "predicted_count": len(prediction_cache.get("all_predictions", {})),
         "last_update": prediction_cache["last_update"]
     }
+
+
+@app.on_event("startup")
+def startup_event():
+    """服务启动时自动开始批量预测"""
+    print("服务启动，自动开始批量预测...")
+    thread = threading.Thread(target=background_batch_predict, daemon=True)
+    thread.start()
 
 
 @app.get("/health")
@@ -160,33 +203,19 @@ def health():
 
 @app.get("/trigger-update")
 def trigger_update(background_tasks: BackgroundTasks):
-    """触发后台全量预测"""
-    # 检查是否24小时内已更新
-    last = prediction_cache.get("last_update")
-    if last:
-        try:
-            last_time = datetime.fromisoformat(last)
-            hours_ago = (datetime.now() - last_time).total_seconds() / 3600
-            if hours_ago < 20 and prediction_cache["status"] == "done":
-                return {
-                    "status": "already_updated",
-                    "last_update": last,
-                    "top10_count": len(prediction_cache["top10"])
-                }
-        except:
-            pass
-
+    """触发后台全量预测（10000只基金）"""
     if prediction_cache["status"] == "running":
         return {
             "status": "running",
             "progress": prediction_cache["progress"],
-            "total": prediction_cache["total"]
+            "total": prediction_cache["total"],
+            "predicted": len(prediction_cache.get("all_predictions", {}))
         }
 
     # 启动后台任务
     thread = threading.Thread(target=background_batch_predict, daemon=True)
     thread.start()
-    return {"status": "started", "message": "后台开始全量预测"}
+    return {"status": "started", "message": "开始批量预测10000只基金"}
 
 
 @app.get("/top10")
@@ -242,6 +271,9 @@ def predict_all(fund_code: str):
 
 if __name__ == "__main__":
     import uvicorn
-    print("FundPicker AI API v3")
+    print("FundPicker AI API v3 — 10000只基金预测")
     print("文档: http://localhost:8000/docs")
+    # 启动时自动开始批量预测
+    thread = threading.Thread(target=background_batch_predict, daemon=True)
+    thread.start()
     uvicorn.run(app, host="0.0.0.0", port=8000)
