@@ -38,24 +38,30 @@ def snapshot_today_predictions(all_predictions: dict, horizon: int = 30) -> int:
 
     today = date.today().isoformat()
     rows = []
+    missing_nav = 0
     for code, pred in all_predictions.items():
         prob = pred.get("probability")
         if prob is None or prob == 0:
             continue
-        nav = _get_latest_nav(code)
+        # 优先用预测时已保存的净值（api_server 存 results 时带上）
+        nav = pred.get("nav_at_predict")
         if nav is None or nav <= 0:
-            continue
+            nav = _get_latest_nav(code)
+            if nav is None or nav <= 0:
+                missing_nav += 1
+                continue
         rows.append({
             "snapshot_date": today,
             "fund_code": code,
             "horizon_days": horizon,
             "probability": float(prob),
             "confidence": int(pred.get("confidence", 3)),
-            "nav_at_predict": nav,
+            "nav_at_predict": float(nav),
             "fund_name": pred.get("name", code),
         })
 
     if not rows:
+        print(f"[backtest] 快照无有效数据（missing_nav={missing_nav}/{len(all_predictions)}）")
         return 0
 
     # 分批插入，避免单请求过大
@@ -76,7 +82,7 @@ def snapshot_today_predictions(all_predictions: dict, horizon: int = 30) -> int:
                 print(f"snapshot batch {i} 失败: {resp.status_code} {resp.text[:200]}")
         except Exception as e:
             print(f"snapshot batch {i} 异常: {e}")
-    print(f"[backtest] 快照写入 {written}/{len(rows)} 条")
+    print(f"[backtest] 快照写入 {written}/{len(rows)} 条 (missing_nav={missing_nav})")
     return written
 
 

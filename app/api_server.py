@@ -133,11 +133,19 @@ def background_batch_predict():
 
                 pred = predictor.predict(code)
                 if "error" not in pred:
+                    # 顺手记录当时的净值，回测 snapshot 直接用，避免二次网络查询
+                    latest_nav = 0.0
+                    try:
+                        if df is not None and len(df) > 0:
+                            latest_nav = float(df.sort_values("date").iloc[-1]["nav"])
+                    except Exception:
+                        pass
                     results[code] = {
                         "name": code_names.get(code, code),
                         "probability": pred["probability"],
                         "confidence": pred["confidence"],
-                        "factors": pred["factors"][:3]
+                        "factors": pred["factors"][:3],
+                        "nav_at_predict": latest_nav
                     }
             except Exception as e:
                 pass
@@ -157,9 +165,12 @@ def background_batch_predict():
                 if (i + 1) % 500 == 0:
                     try:
                         save_predictions(prediction_cache["top10"], results)
-                        print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 已保存")
-                    except:
-                        pass
+                        # 顺便 snapshot 已预测的基金（增量对账用）
+                        from backtest import snapshot_today_predictions
+                        snapshot_today_predictions(results, horizon=30)
+                        print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 已保存+快照")
+                    except Exception as e:
+                        print(f"保存失败: {e}")
 
             time.sleep(0.2)  # 限流
 
