@@ -145,6 +145,7 @@ class FundPredictor:
         """
         预测单只基金未来走势
         返回: {probability, confidence, model_scores, factors}
+        内存优化：用完 DataFrame 立即释放
         """
         if self.gb_model is None:
             return {"error": "模型未训练"}
@@ -154,11 +155,17 @@ class FundPredictor:
             return {"error": f"无法加载 {fund_code} 的数据"}
 
         features = compute_features(df)
+        del df  # 释放原始数据
+
         exclude_cols = [c for c in features.columns if c.startswith("target_") or c in ["date", "nav", "daily_return", "equityReturn", "unitMoney"]]
         feature_cols = [c for c in features.columns if c not in exclude_cols]
 
         latest = features.iloc[-1:][feature_cols]
+        factors = self._extract_factors(features.iloc[-1])
+        del features  # 释放特征 DataFrame
+
         X = np.nan_to_num(latest.values, nan=0.0, posinf=0.0, neginf=0.0)
+        del latest
         X_scaled = self.scaler.transform(X)
 
         gb_prob = float(self.gb_model.predict_proba(X_scaled)[0][1])
@@ -167,7 +174,6 @@ class FundPredictor:
 
         agreement = 1 - abs(gb_prob - rf_prob)
         confidence = int(min(5, max(1, agreement * 5)))
-        factors = self._extract_factors(features.iloc[-1])
 
         return {
             "fund_code": fund_code,

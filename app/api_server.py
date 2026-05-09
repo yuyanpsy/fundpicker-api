@@ -63,8 +63,10 @@ def ensure_fund_data(code: str) -> bool:
 
 
 def background_batch_predict():
-    """后台批量预测（在线程中运行）— 预测10000只基金"""
+    """后台批量预测（在线程中运行）— 预测10000只基金，内存优化版"""
     global prediction_cache
+    import gc
+
     with cache_lock:
         if prediction_cache["status"] == "running":
             return  # 已在运行
@@ -86,6 +88,9 @@ def background_batch_predict():
                             all_codes.append(code)
                             code_names[code] = row.get("name", code)
                     print(f"获取{fund_type}类型: {len(rank_df)}只, 累计去重: {len(all_codes)}只")
+                # 排行数据用完立即释放
+                del rank_df
+                gc.collect()
             except Exception as e:
                 print(f"获取{fund_type}排行失败: {e}")
             time.sleep(1)
@@ -131,15 +136,27 @@ def background_batch_predict():
                     else:
                         continue
 
+                # 记录当时净值（回测用）
+                latest_nav = 0.0
+                try:
+                    latest_nav = float(df.sort_values("date").iloc[-1]["nav"])
+                except Exception:
+                    pass
+
                 pred = predictor.predict(code)
-                if "error" not in pred:
-                    # 顺手记录当时的净值，回测 snapshot 直接用，避免二次网络查询
-                    latest_nav = 0.0
+
+                # 预测完立即释放 DataFrame 内存
+                del df
+
+                # 删除本地 CSV 释放磁盘（Render 临时文件系统，重启也会丢）
+                nav_path = os.path.join(DATA_DIR, "nav", f"{code}.csv")
+                if os.path.exists(nav_path):
                     try:
-                        if df is not None and len(df) > 0:
-                            latest_nav = float(df.sort_values("date").iloc[-1]["nav"])
+                        os.remove(nav_path)
                     except Exception:
                         pass
+                
+                if "error" not in pred:
                     results[code] = {
                         "name": code_names.get(code, code),
                         "probability": pred["probability"],
@@ -147,13 +164,14 @@ def background_batch_predict():
                         "factors": pred["factors"][:3],
                         "nav_at_predict": latest_nav
                     }
+                del pred
             except Exception as e:
                 pass
 
             with cache_lock:
                 prediction_cache["progress"] = i + 1
-                # 每100只更新一次TOP10和保存
-                if (i + 1) % 100 == 0 or i == len(all_codes) - 1:
+                # 每100只更新一次TOP10
+                if (i + 1) % 100 == 0:
                     top10 = sorted(results.items(),
                                    key=lambda x: x[1]["probability"], reverse=True)[:10]
                     prediction_cache["top10"] = [
@@ -161,7 +179,7 @@ def background_batch_predict():
                     ]
                     prediction_cache["all_predictions"] = results
 
-                # 每500只持久化一次到Supabase
+                # 每500只持久化 + 快照 + 强制GC
                 if (i + 1) % 500 == 0:
                     try:
                         save_predictions(prediction_cache["top10"], results)
@@ -171,12 +189,18 @@ def background_batch_predict():
                         print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 已保存+快照")
                     except Exception as e:
                         print(f"保存失败: {e}")
+                    # 强制垃圾回收释放内存
+                    gc.collect()
 
             time.sleep(0.2)  # 限流
 
         with cache_lock:
             prediction_cache["status"] = "done"
             prediction_cache["last_update"] = datetime.now().isoformat()
+            top10 = sorted(results.items(),
+                           key=lambda x: x[1]["probability"], reverse=True)[:10]
+            prediction_cache["top10"] = [{"code": c, **v} for c, v in top10]
+            prediction_cache["all_predictions"] = results
             print(f"批量预测完成: {len(results)}/{len(all_codes)} 只基金")
 
         # 持久化到Supabase
