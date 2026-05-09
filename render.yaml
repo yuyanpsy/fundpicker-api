@@ -20,3 +20,28 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+
+  # Cron job: 每天 9:30 UTC (北京17:30 收盘后) 存快照
+  # 独立运行，不依赖 web 服务状态，直接从 Supabase 读预测 + 东方财富拉 nav
+  - type: cron
+    name: fundpicker-daily-snapshot
+    runtime: python
+    plan: free
+    schedule: "30 9 * * *"
+    buildCommand: pip install requests
+    startCommand: python app/daily_snapshot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # Cron job: 每天 10:00 UTC 对账 30 天前的快照 + 聚合胜率
+  - type: cron
+    name: fundpicker-daily-verify
+    runtime: python
+    plan: free
+    schedule: "0 10 * * *"
+    buildCommand: pip install requests
+    startCommand: python app/daily_verify.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
