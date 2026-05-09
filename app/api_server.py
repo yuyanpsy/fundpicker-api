@@ -324,6 +324,36 @@ def run_backtest_now():
     return {"status": "started", "count": len(preds)}
 
 
+@app.post("/daily-snapshot")
+@app.get("/daily-snapshot")
+def daily_snapshot_endpoint():
+    """
+    外部 cron 调用：从 Supabase 读预测 + 东方财富拉 nav，批量写快照
+    独立于批量预测任务，不依赖 web 服务的缓存状态
+    立即返回，后台异步执行
+    """
+    import sys, os
+    sys.path.insert(0, os.path.dirname(__file__))
+    from daily_snapshot import main as run_snapshot
+    thread = threading.Thread(target=lambda: run_snapshot(horizon=30), daemon=True)
+    thread.start()
+    return {"status": "started", "task": "daily_snapshot"}
+
+
+@app.post("/daily-verify")
+@app.get("/daily-verify")
+def daily_verify_endpoint():
+    """
+    外部 cron 调用：对账 30 天前快照 + 聚合胜率
+    """
+    import sys, os
+    sys.path.insert(0, os.path.dirname(__file__))
+    from daily_verify import main as run_verify
+    thread = threading.Thread(target=run_verify, daemon=True)
+    thread.start()
+    return {"status": "started", "task": "daily_verify"}
+
+
 if __name__ == "__main__":
     import uvicorn
     print("FundPicker AI API v3 — 10000只基金预测")
