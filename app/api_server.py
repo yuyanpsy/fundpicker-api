@@ -14,6 +14,7 @@ from data_collector import (load_nav_data, fetch_fund_nav_from_pingzhongdata,
                             save_single_nav, fetch_fund_rank, DATA_DIR)
 from feature_engineering import compute_features
 from supabase_store import save_predictions, load_predictions
+from backtest import run_daily_backtest
 
 app = FastAPI(title="FundPicker AI API", version="3.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -165,10 +166,17 @@ def background_batch_predict():
         with cache_lock:
             prediction_cache["status"] = "done"
             prediction_cache["last_update"] = datetime.now().isoformat()
-            print(f"批量预测完成: {len(results)}/{len(codes)} 只基金")
+            print(f"批量预测完成: {len(results)}/{len(all_codes)} 只基金")
 
         # 持久化到Supabase
         save_predictions(prediction_cache["top10"], results)
+
+        # 触发每日回测流程：存快照 + 对账 30 天前的预测 + 聚合胜率
+        try:
+            print("[backtest] 启动每日回测流程...")
+            run_daily_backtest(results, horizon=30)
+        except Exception as e:
+            print(f"[backtest] 每日回测失败: {e}")
 
     except Exception as e:
         print(f"批量预测失败: {e}")
@@ -267,6 +275,42 @@ def predict_all(fund_code: str):
         except Exception as e:
             results[f"{h}d"] = {"error": str(e)}
     return results
+
+
+@app.get("/backtest")
+def get_backtest(horizon: int = 30):
+    """
+    获取分档位回测胜率（前端详情页展示用）
+    返回：各档位的样本数 + 实际胜率 + 平均实际涨跌幅
+    """
+    try:
+        import requests as _requests
+        from supabase_store import SUPABASE_URL, SUPABASE_KEY
+        resp = _requests.get(
+            f"{SUPABASE_URL}/rest/v1/fund_prediction_backtest"
+            f"?horizon_days=eq.{horizon}&order=bucket_min.asc",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            return {"horizon": horizon, "buckets": resp.json()}
+        return {"horizon": horizon, "buckets": [], "error": f"supabase {resp.status_code}"}
+    except Exception as e:
+        return {"horizon": horizon, "buckets": [], "error": str(e)}
+
+
+@app.post("/run-backtest")
+def run_backtest_now():
+    """手动触发一次回测流程（不等 cronjob）"""
+    preds = prediction_cache.get("all_predictions", {})
+    if not preds:
+        return {"status": "no_predictions"}
+    thread = threading.Thread(
+        target=lambda: run_daily_backtest(preds, horizon=30),
+        daemon=True
+    )
+    thread.start()
+    return {"status": "started", "count": len(preds)}
 
 
 if __name__ == "__main__":
