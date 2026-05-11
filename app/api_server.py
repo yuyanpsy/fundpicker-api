@@ -236,10 +236,8 @@ def root():
 
 @app.on_event("startup")
 def startup_event():
-    """服务启动时自动开始批量预测"""
-    print("服务启动，自动开始批量预测...")
-    thread = threading.Thread(target=background_batch_predict, daemon=True)
-    thread.start()
+    """服务启动时从 Supabase 恢复数据（不再自动启动批量预测，由独立 cron 负责）"""
+    print("服务启动，数据已从 Supabase 恢复")
 
 
 @app.get("/health")

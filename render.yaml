@@ -9,20 +9,21 @@ services:
       - key: PYTHON_VERSION
         value: "3.11"
 
-  # Cron job: 每5分钟唤醒Render，确保预测持续运行直到完成
+  # Cron job: 每5分钟跑一批500只基金预测（独立进程，不依赖web服务）
+  # 每次从 Supabase 读断点，预测500只新基金，保存后退出
+  # 5分钟后再次启动继续下一批，直到全部完成
   - type: cron
-    name: fundpicker-keepalive
+    name: fundpicker-batch-predict
     runtime: python
     plan: free
     schedule: "*/5 * * * *"
-    buildCommand: pip install requests
-    startCommand: python -c "import requests,sys; r=requests.get('https://fundpicker-api.onrender.com/trigger-update',timeout=30); print(r.text[:200]); sys.exit(0)"
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd app && python batch_predict_cron.py
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
 
   # Cron job: 每天 9:30 UTC (北京17:30 收盘后) 存快照
-  # 独立运行，不依赖 web 服务状态，直接从 Supabase 读预测 + 东方财富拉 nav
   - type: cron
     name: fundpicker-daily-snapshot
     runtime: python
