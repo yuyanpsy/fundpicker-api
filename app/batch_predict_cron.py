@@ -30,25 +30,61 @@ HEADERS_SB = {
 
 
 def get_all_fund_codes():
-    """获取全部基金代码（去重）"""
+    """获取全部基金代码（去重），目标 20000 只"""
     all_codes = []
     code_names = {}
-    for fund_type, size in [("all", 5000), ("gp", 5000), ("hh", 3000), ("zs", 3000), ("qdii", 2000)]:
+    # 多类型 + 多页拉取，覆盖 20000 只
+    fetch_configs = [
+        ("all", 5000, 1), ("all", 5000, 2), ("all", 5000, 3), ("all", 5000, 4),
+        ("gp", 5000, 1), ("gp", 5000, 2),
+        ("hh", 5000, 1), ("hh", 5000, 2),
+        ("zs", 5000, 1), ("zs", 5000, 2),
+        ("qdii", 3000, 1),
+        ("zq", 5000, 1), ("zq", 5000, 2),
+    ]
+    for fund_type, size, page in fetch_configs:
+        if len(all_codes) >= 20000:
+            break
         try:
-            rank_df = fetch_fund_rank(fund_type, size)
+            rank_df = fetch_fund_rank_paged(fund_type, size, page)
             if rank_df is not None and len(rank_df) > 0:
+                new_count = 0
                 for _, row in rank_df.iterrows():
                     code = row["code"]
                     if code not in code_names:
                         all_codes.append(code)
                         code_names[code] = row.get("name", code)
-                print(f"  {fund_type}: {len(rank_df)}只, 累计去重: {len(all_codes)}只")
+                        new_count += 1
+                print(f"  {fund_type} p{page}: {len(rank_df)}只, 新增{new_count}, 累计{len(all_codes)}只")
             del rank_df
             gc.collect()
         except Exception as e:
-            print(f"  {fund_type} 失败: {e}")
+            print(f"  {fund_type} p{page} 失败: {e}")
         time.sleep(0.5)
-    return all_codes, code_names
+    return all_codes[:20000], code_names
+
+
+def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
+    """获取基金排行（支持分页）"""
+    import re
+    url = (f"https://fund.eastmoney.com/data/rankhandler.aspx"
+           f"?op=ph&dt=kf&ft={fund_type}&rs=&gs=0&sc=6yzf&st=desc"
+           f"&sd=2025-01-01&ed=2026-12-31&qdii=&tabSubtype=,,,,,&pi={page}&pn={page_size}&dx=1"
+           f"&v={int(time.time()*1000)}")
+    import pandas as pd
+    resp = requests.get(url, headers={"Referer": "https://fund.eastmoney.com/data/fundranking.html"}, timeout=30)
+    text = resp.text
+    match = re.search(r'datas:\[(.*?)\]', text, re.DOTALL)
+    if not match:
+        return None
+    items = re.findall(r'"([^"]+)"', match.group(1))
+    rows = []
+    for item in items:
+        fields = item.split(",")
+        if len(fields) < 20:
+            continue
+        rows.append({"code": fields[0], "name": fields[1]})
+    return pd.DataFrame(rows) if rows else None
 
 
 def get_progress():
