@@ -183,10 +183,13 @@ def background_batch_predict():
                 if (i + 1) % 500 == 0:
                     try:
                         save_predictions(prediction_cache["top10"], results)
-                        # 顺便 snapshot 已预测的基金（增量对账用）
-                        from backtest import snapshot_today_predictions
-                        snapshot_today_predictions(results, horizon=30)
-                        print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 已保存+快照")
+                        # 只 snapshot 有 nav_at_predict 的新预测（跳过旧数据避免逐个拉网络）
+                        new_preds = {k: v for k, v in results.items()
+                                     if v.get("nav_at_predict", 0) > 0}
+                        if new_preds:
+                            from backtest import snapshot_today_predictions
+                            snapshot_today_predictions(new_preds, horizon=30)
+                        print(f"进度: {i+1}/{len(all_codes)}, 已预测{len(results)}只, 新快照{len(new_preds)}只")
                     except Exception as e:
                         print(f"保存失败: {e}")
                     # 强制垃圾回收释放内存

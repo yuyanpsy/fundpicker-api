@@ -46,10 +46,9 @@ def snapshot_today_predictions(all_predictions: dict, horizon: int = 30) -> int:
         # 优先用预测时已保存的净值（api_server 存 results 时带上）
         nav = pred.get("nav_at_predict")
         if nav is None or nav <= 0:
-            nav = _get_latest_nav(code)
-            if nav is None or nav <= 0:
-                missing_nav += 1
-                continue
+            # 没有 nav 的旧数据直接跳过，不走网络（避免阻塞主预测流程）
+            missing_nav += 1
+            continue
         rows.append({
             "snapshot_date": today,
             "fund_code": code,
