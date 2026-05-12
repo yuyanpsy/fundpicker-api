@@ -29,6 +29,55 @@ HEADERS_SB = {
 }
 
 
+def calc_risk_metrics(df) -> tuple:
+    """
+    从净值 DataFrame 计算夏普比率、最大回撤、正收益概率
+    返回 (sharpe, max_drawdown_pct, positive_pct)
+    """
+    import numpy as np
+    try:
+        navs = df.sort_values("date")["nav"].astype(float).values
+        if len(navs) < 20:
+            return (0.0, 0.0, 0.0)
+
+        # 日收益率
+        returns = np.diff(navs) / navs[:-1]
+        returns = returns[np.isfinite(returns)]
+        if len(returns) < 10:
+            return (0.0, 0.0, 0.0)
+
+        # 年化波动率
+        daily_vol = np.std(returns)
+        annual_vol = daily_vol * np.sqrt(252)
+
+        # 年化收益
+        total_return = (navs[-1] - navs[0]) / navs[0]
+        n_days = len(returns)
+        annual_return = (1 + total_return) ** (252.0 / n_days) - 1
+
+        # 夏普比率（无风险利率 2%）
+        sharpe = (annual_return - 0.02) / annual_vol if annual_vol > 0 else 0.0
+
+        # 最大回撤
+        peak = navs[0]
+        max_dd = 0.0
+        for nav in navs:
+            if nav > peak:
+                peak = nav
+            dd = (nav - peak) / peak
+            if dd < max_dd:
+                max_dd = dd
+        max_dd_pct = abs(max_dd) * 100  # 正数百分比
+
+        # 正收益概率
+        positive_count = sum(1 for i in range(len(navs)) if navs[-1] > navs[i])
+        positive_pct = positive_count / len(navs) * 100
+
+        return (sharpe, max_dd_pct, positive_pct)
+    except Exception:
+        return (0.0, 0.0, 0.0)
+
+
 def get_all_fund_codes():
     """获取全部基金代码（去重），目标 20000 只"""
     all_codes = []
@@ -146,6 +195,10 @@ def main():
                     continue
 
             latest_nav = float(df.sort_values("date").iloc[-1]["nav"])
+
+            # 计算风险收益指标（夏普/回撤/正收益率）
+            sharpe, max_dd, positive_pct = calc_risk_metrics(df)
+
             pred = predictor.predict(code)
             del df
             gc.collect()
@@ -156,7 +209,10 @@ def main():
                     "probability": pred["probability"],
                     "confidence": pred["confidence"],
                     "factors": pred.get("factors", [])[:3],
-                    "nav_at_predict": latest_nav
+                    "nav_at_predict": latest_nav,
+                    "sharpe": round(sharpe, 2),
+                    "max_drawdown": round(max_dd, 2),
+                    "positive_pct": round(positive_pct, 1)
                 }
                 predicted += 1
             del pred
