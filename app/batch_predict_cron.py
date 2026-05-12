@@ -241,22 +241,24 @@ def main():
 
     # 保存到 Supabase
     if predicted > 0:
-        # TOP10 选择：优先从满足金色条件的基金中选 AI 最高的
-        # 金色条件：AI>=70 + confidence>=3 + sharpe>1.5 + max_drawdown<15 + positive_pct>60
-        golden_funds = [(c, v) for c, v in results.items()
+        # TOP10 选择：从 Supabase 全量数据中选金色基金（不只是本批 results）
+        # 重新加载最新全量数据确保包含所有已有 sharpe 的基金
+        _, fresh_all, _ = load_predictions()
+        all_data = fresh_all if fresh_all else results
+
+        golden_funds = [(c, v) for c, v in all_data.items()
                         if v.get("probability", 0) >= 70
                         and v.get("confidence", 0) >= 3
-                        and v.get("sharpe", 0) > 1.5
-                        and v.get("max_drawdown", 100) < 15
-                        and v.get("positive_pct", 0) > 60]
+                        and (v.get("sharpe") or 0) > 1.5
+                        and (v.get("max_drawdown") or 100) < 15
+                        and (v.get("positive_pct") or 0) > 60]
         golden_funds.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
 
         if len(golden_funds) >= 10:
             top10 = golden_funds[:10]
         else:
-            # 金色不足10只，用AI最高的补齐（排除已选的）
             golden_codes = {c for c, _ in golden_funds}
-            remaining = [(c, v) for c, v in results.items() if c not in golden_codes]
+            remaining = [(c, v) for c, v in all_data.items() if c not in golden_codes]
             remaining.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
             top10 = golden_funds + remaining[:10 - len(golden_funds)]
 
