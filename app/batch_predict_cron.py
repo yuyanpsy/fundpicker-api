@@ -155,12 +155,12 @@ def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
 
 
 def get_progress():
-    """从 Supabase 读取已完成的预测进度（必须有 sharpe 字段才算完成）"""
+    """从 Supabase 读取已完成的预测进度（必须有 sharpe + year_change + sector 才算完成）"""
     _, all_preds, _ = load_predictions()
     if not all_preds:
         return set()
-    # 只有同时有 probability 和 sharpe 的才算完成
-    return {k for k, v in all_preds.items() if v.get("sharpe") is not None}
+    return {k for k, v in all_preds.items()
+            if v.get("sharpe") is not None and v.get("year_change") is not None and v.get("sector") is not None}
 
 
 def main():
