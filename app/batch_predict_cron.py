@@ -264,7 +264,21 @@ def main():
 
         top10_list = [{"code": c, **v} for c, v in top10]
         print(f"TOP10: 金色{len(golden_funds)}只, 选入{len(top10_list)}只")
+
+        # 分开保存：先写 all_predictions，再单独 PATCH top10（避免大 JSON 超限）
         save_predictions(top10_list, results)
+        # 单独更新 top10 字段确保生效
+        try:
+            import requests as _req
+            _req.patch(
+                f"{SUPABASE_URL}/rest/v1/fund_predictions?id=eq.latest",
+                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
+                         "Content-Type": "application/json"},
+                json={"top10": top10_list},
+                timeout=30
+            )
+        except Exception:
+            pass
 
         # 快照（只存有 nav 的新预测）
         try:
