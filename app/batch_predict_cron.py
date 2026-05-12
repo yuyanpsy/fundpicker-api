@@ -79,9 +79,10 @@ def calc_risk_metrics(df) -> tuple:
 
 
 def get_all_fund_codes():
-    """获取全部基金代码（去重），目标 20000 只"""
+    """获取全部基金代码（去重），目标 20000 只，同时保存涨跌幅"""
     all_codes = []
-    code_names = {}
+    code_names = {}  # code -> name
+    code_changes = {}  # code -> {day/week/month/3m/6m/year change}
     # 多类型 + 多页拉取，覆盖 20000 只
     fetch_configs = [
         ("all", 5000, 1), ("all", 5000, 2), ("all", 5000, 3), ("all", 5000, 4),
@@ -103,6 +104,14 @@ def get_all_fund_codes():
                     if code not in code_names:
                         all_codes.append(code)
                         code_names[code] = row.get("name", code)
+                        code_changes[code] = {
+                            "day_change": row.get("day_change", 0),
+                            "week_change": row.get("week_change", 0),
+                            "month_change": row.get("month_change", 0),
+                            "three_month_change": row.get("three_month_change", 0),
+                            "six_month_change": row.get("six_month_change", 0),
+                            "year_change": row.get("year_change", 0),
+                        }
                         new_count += 1
                 print(f"  {fund_type} p{page}: {len(rank_df)}只, 新增{new_count}, 累计{len(all_codes)}只")
             del rank_df
@@ -110,7 +119,7 @@ def get_all_fund_codes():
         except Exception as e:
             print(f"  {fund_type} p{page} 失败: {e}")
         time.sleep(0.5)
-    return all_codes[:20000], code_names
+    return all_codes[:20000], code_names, code_changes
 
 
 def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
@@ -132,7 +141,16 @@ def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
         fields = item.split(",")
         if len(fields) < 20:
             continue
-        rows.append({"code": fields[0], "name": fields[1]})
+        rows.append({
+            "code": fields[0],
+            "name": fields[1],
+            "day_change": float(fields[6]) if fields[6] else 0,
+            "week_change": float(fields[7]) if fields[7] else 0,
+            "month_change": float(fields[8]) if fields[8] else 0,
+            "three_month_change": float(fields[9]) if fields[9] else 0,
+            "six_month_change": float(fields[10]) if fields[10] else 0,
+            "year_change": float(fields[11]) if fields[11] else 0,
+        })
     return pd.DataFrame(rows) if rows else None
 
 
@@ -160,7 +178,7 @@ def main():
 
     # 获取全部基金代码
     print("获取基金列表...")
-    all_codes, code_names = get_all_fund_codes()
+    all_codes, code_names, code_changes = get_all_fund_codes()
     if not all_codes:
         print("无基金代码，退出")
         return
@@ -207,15 +225,47 @@ def main():
             gc.collect()
 
             if "error" not in pred:
+                # 板块归类
+                fund_name = code_names.get(code, code)
+                sector = ""
+                SECTOR_KW = [
+                    ("科技",["科技","信息","互联网","数字","电子","计算机","软件","通信","5G","智联","智选"]),
+                    ("半导体",["半导体","芯片","集成电路"]),("人工智能",["人工智能","AI","智能","机器人","算力"]),
+                    ("医药",["医药","医疗","健康","生物","创新药","中药"]),
+                    ("新能源",["新能源","光伏","风电","碳中和"]),
+                    ("消费",["消费","食品","饮料","白酒","家电","零售","乐享生活"]),
+                    ("金融",["金融","银行","证券","保险"]),("军工",["军工","国防","航天","航空"]),
+                    ("新能车",["新能车","汽车","智能驾驶","电动车","锂电"]),
+                    ("制造",["制造","工业","机械","装备","智造"]),
+                    ("资源",["资源","有色","钢铁","煤炭","化工","材料","黄金"]),
+                    ("港股",["港股","恒生","H股","沪港深"]),("海外",["海外","QDII","美国","全球","纳斯达克"]),
+                    ("红利",["红利","高股息","分红"]),("成长",["成长","企业成长"]),
+                    ("创新",["创新驱动","创新成长","创新"]),
+                    ("指数",["沪深300","中证500","中证1000","指数","ETF"]),
+                    ("债券",["债券","纯债","信用债","可转债"]),
+                    ("混合",["混合","灵活配置","平衡","回报","精选","优选"]),
+                ]
+                for s_name, s_kws in SECTOR_KW:
+                    if any(kw in fund_name for kw in s_kws):
+                        sector = s_name
+                        break
+
+                changes = code_changes.get(code, {})
                 results[code] = {
-                    "name": code_names.get(code, code),
+                    "name": fund_name,
                     "probability": pred["probability"],
                     "confidence": pred["confidence"],
                     "factors": pred.get("factors", [])[:3],
                     "nav_at_predict": latest_nav,
                     "sharpe": round(sharpe, 2),
                     "max_drawdown": round(max_dd, 2),
-                    "positive_pct": round(positive_pct, 1)
+                    "positive_pct": round(positive_pct, 1),
+                    "sector": sector,
+                    "year_change": round(changes.get("year_change", 0), 2),
+                    "six_month_change": round(changes.get("six_month_change", 0), 2),
+                    "three_month_change": round(changes.get("three_month_change", 0), 2),
+                    "month_change": round(changes.get("month_change", 0), 2),
+                    "week_change": round(changes.get("week_change", 0), 2),
                 }
                 predicted += 1
             del pred
