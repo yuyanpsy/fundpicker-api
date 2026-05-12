@@ -137,9 +137,12 @@ def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
 
 
 def get_progress():
-    """从 Supabase 读取已完成的预测进度"""
+    """从 Supabase 读取已完成的预测进度（必须有 sharpe 字段才算完成）"""
     _, all_preds, _ = load_predictions()
-    return set(all_preds.keys()) if all_preds else set()
+    if not all_preds:
+        return set()
+    # 只有同时有 probability 和 sharpe 的才算完成
+    return {k for k, v in all_preds.items() if v.get("sharpe") is not None}
 
 
 def main():
@@ -238,9 +241,27 @@ def main():
 
     # 保存到 Supabase
     if predicted > 0:
-        top10 = sorted(results.items(),
-                       key=lambda x: x[1].get("probability", 0), reverse=True)[:10]
+        # TOP10 选择：优先从满足金色条件的基金中选 AI 最高的
+        # 金色条件：AI>=70 + confidence>=3 + sharpe>1.5 + max_drawdown<15 + positive_pct>60
+        golden_funds = [(c, v) for c, v in results.items()
+                        if v.get("probability", 0) >= 70
+                        and v.get("confidence", 0) >= 3
+                        and v.get("sharpe", 0) > 1.5
+                        and v.get("max_drawdown", 100) < 15
+                        and v.get("positive_pct", 0) > 60]
+        golden_funds.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
+
+        if len(golden_funds) >= 10:
+            top10 = golden_funds[:10]
+        else:
+            # 金色不足10只，用AI最高的补齐（排除已选的）
+            golden_codes = {c for c, _ in golden_funds}
+            remaining = [(c, v) for c, v in results.items() if c not in golden_codes]
+            remaining.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
+            top10 = golden_funds + remaining[:10 - len(golden_funds)]
+
         top10_list = [{"code": c, **v} for c, v in top10]
+        print(f"TOP10: 金色{len(golden_funds)}只, 选入{len(top10_list)}只")
         save_predictions(top10_list, results)
 
         # 快照（只存有 nav 的新预测）
