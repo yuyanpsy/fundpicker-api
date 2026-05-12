@@ -298,10 +298,10 @@ def main():
 
         golden_funds = [(c, v) for c, v in all_data.items()
                         if v.get("probability", 0) >= 70
-                        and v.get("confidence", 0) >= 3
-                        and (v.get("sharpe") or 0) > 1.5
+                        and v.get("confidence", 0) >= 4
+                        and (v.get("sharpe") or 0) > 2.0
                         and (v.get("max_drawdown") or 100) < 15
-                        and (v.get("positive_pct") or 0) > 60]
+                        and (v.get("positive_pct") or 0) > 80]
         golden_funds.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
 
         if len(golden_funds) >= 10:
