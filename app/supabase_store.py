@@ -19,10 +19,12 @@ HEADERS = {
 def save_predictions(top10: list, all_predictions: dict):
     """保存预测结果到Supabase"""
     try:
+        from datetime import datetime
         data = [{
             "id": "latest",
             "top10": top10,
-            "all_predictions": all_predictions
+            "all_predictions": all_predictions,
+            "updated_at": datetime.utcnow().isoformat() + "+00:00"
         }]
         resp = requests.post(
             f"{SUPABASE_URL}/rest/v1/fund_predictions?on_conflict=id",
