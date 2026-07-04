@@ -1180,6 +1180,29 @@ FundPicker/
 
 ## 九、变更记录
 
+### 2026-07-04
+
+#### 架构迁移：Render Cron Jobs → GitHub Actions
+- **原因**：Render Cron Job 不支持 Free 计划（起步 $0.00016/分钟），产生约 $0.81/月费用
+- **方案**：将 3 个 Cron Job 迁移到 GitHub Actions（$0/月，2000分钟免费额度）
+- **新增文件**：
+  - `.github/workflows/batch-predict.yml` — 每天 UTC 1:00（北京9:00），仅周一至周五
+  - `.github/workflows/daily-snapshot.yml` — 每天 UTC 9:30（北京17:30），仅周一至周五
+  - `.github/workflows/daily-verify.yml` — 每天 UTC 10:00（北京18:00），仅周一至周五
+  - `requirements-cron.txt` — 轻量依赖文件（pandas, numpy, scikit-learn, joblib, requests, ta）
+  - `.gitignore` — Git 忽略规则
+- **代码修改**：
+  - `supabase_store.py`、`daily_snapshot.py`、`daily_verify.py`：Supabase 配置改为 `os.environ.get()` 读取环境变量，支持 GitHub Secrets 注入
+- **保留**：Render Web Service（Free，提供 REST API）、Supabase（Free Tier 数据存储）
+- **总费用**：$0/月（Render Web $0 + GitHub Actions $0 + Supabase $0）
+
+#### 系统运行状态
+- Render Web API：在线运行 ✅（Free 计划）
+- GitHub Actions（批量预测）：每个交易日 9:00 自动运行 ✅
+- GitHub Actions（每日快照）：每个交易日 17:30 自动存快照 ✅
+- GitHub Actions（每日对账）：每个交易日 18:00 自动验证预测 ✅
+- **所有服务自动运行，不依赖本地开发环境，总费用 $0/月**
+
 ### 2026-05-13
 
 #### 数据清理
@@ -1203,9 +1226,9 @@ FundPicker/
 - 验证结论：177只金色基金的近6月涨幅全部>11%，说明现有"成立以来全量"标准已隐含近期表现要求
 - 不需要额外增加"近6月夏普>1.5"条件
 
-#### 系统运行状态
+#### 系统运行状态（2026-05-13 时）
 - Render Web API：在线运行 ✅
-- Render Cron（批量预测）：每5分钟自动跑500只，持续补充夏普数据 ✅
-- Render Cron（每日快照）：每天17:30自动存快照 ✅
-- Render Cron（每日对账）：每天18:00自动验证预测 ✅
+- Render Cron（批量预测）：每5分钟自动跑500只，持续补充夏普数据 ✅（已于2026-07-04删除，迁移至GitHub Actions）
+- Render Cron（每日快照）：每天17:30自动存快照 ✅（已于2026-07-04迁移至GitHub Actions）
+- Render Cron（每日对账）：每天18:00自动验证预测 ✅（已于2026-07-04迁移至GitHub Actions）
 - **所有服务自动运行，不依赖本地开发环境**

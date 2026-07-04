@@ -1,0 +1,29 @@
+name: Daily Verify
+
+on:
+  schedule:
+    # 北京时间每天 18:00（UTC 10:00），快照完成后验证
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements-cron.txt'
+
+      - name: Install dependencies
+        run: pip install -r requirements-cron.txt
+
+      - name: Run daily verify
+        run: python app/daily_verify.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

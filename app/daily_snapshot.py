@@ -5,13 +5,14 @@
 作为独立 cron 运行，不依赖 Render web 服务的状态
 Render 即使 OOM 重启多次也不影响本脚本
 """
+import os
 import requests
 import time
 from datetime import date, datetime
 from typing import Optional
 
-SUPABASE_URL = "https://edzsmjegnkrbedqpotgu.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkenNtamVnbmtyYmVkcXBvdGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDA5NDcsImV4cCI6MjA5MTg3Njk0N30.J1gHxRiRgEBSMtd3WwhmkwiO2bIpNJy2LDsphD0SPQU"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://edzsmjegnkrbedqpotgu.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkenNtamVnbmtyYmVkcXBvdGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDA5NDcsImV4cCI6MjA5MTg3Njk0N30.J1gHxRiRgEBSMtd3WwhmkwiO2bIpNJy2LDsphD0SPQU")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 数据文件（体积大，不入库）
+data/nav/*.csv
+data/fund_rank_*.csv
+
+# 模型文件（通过 Git LFS 管理或单独上传）
+# models/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
