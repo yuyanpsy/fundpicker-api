@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from model_trainer import FundPredictor
 from data_collector import (load_nav_data, fetch_fund_nav_from_pingzhongdata,
                             save_single_nav, fetch_fund_rank, DATA_DIR)
-from supabase_store import save_predictions, load_predictions, SUPABASE_URL, SUPABASE_KEY
+from supabase_store import save_predictions, load_predictions, load_progress, patch_top10, SUPABASE_URL, SUPABASE_KEY
 
 BATCH_SIZE = 500  # 每次跑 500 只
 HEADERS_SB = {
@@ -155,12 +155,9 @@ def fetch_fund_rank_paged(fund_type="all", page_size=5000, page=1):
 
 
 def get_progress():
-    """从 Supabase 读取已完成的预测进度（必须有 sharpe + year_change + sector 才算完成）"""
-    _, all_preds, _ = load_predictions()
-    if not all_preds:
-        return set()
-    return {k for k, v in all_preds.items()
-            if v.get("sharpe") is not None and v.get("year_change") is not None and v.get("sector") is not None}
+    """从 Supabase 读取已完成的预测进度（轻量版，只读 predicted_codes ~80KB）"""
+    done = load_progress()
+    return set(done.keys()) if done else set()
 
 
 def main():
@@ -291,12 +288,12 @@ def main():
 
     # 保存到 Supabase
     if predicted > 0:
-        # TOP10 选择：从 Supabase 全量数据中选金色基金（不只是本批 results）
-        # 重新加载最新全量数据确保包含所有已有 sharpe 的基金
-        _, fresh_all, _ = load_predictions()
-        all_data = fresh_all if fresh_all else results
+        # TOP10 选择：只从本批 results + 已有结果中选
+        # 轻量加载：只读 predicted_codes 判断总量
+        done_count = len(get_progress())
+        print(f"总已完成约 {done_count} 只，开始选 TOP10")
 
-        golden_funds = [(c, v) for c, v in all_data.items()
+        golden_funds = [(c, v) for c, v in results.items()
                         if v.get("probability", 0) >= 70
                         and v.get("confidence", 0) >= 4
                         and (v.get("sharpe") or 0) > 2.0
@@ -308,27 +305,15 @@ def main():
             top10 = golden_funds[:10]
         else:
             golden_codes = {c for c, _ in golden_funds}
-            remaining = [(c, v) for c, v in all_data.items() if c not in golden_codes]
+            remaining = [(c, v) for c, v in results.items() if c not in golden_codes]
             remaining.sort(key=lambda x: x[1].get("probability", 0), reverse=True)
             top10 = golden_funds + remaining[:10 - len(golden_funds)]
 
         top10_list = [{"code": c, **v} for c, v in top10]
         print(f"TOP10: 金色{len(golden_funds)}只, 选入{len(top10_list)}只")
 
-        # 分开保存：先写 all_predictions，再单独 PATCH top10（避免大 JSON 超限）
+        # 保存全量预测（含 predicted_codes 索引）
         save_predictions(top10_list, results)
-        # 单独更新 top10 字段确保生效
-        try:
-            import requests as _req
-            _req.patch(
-                f"{SUPABASE_URL}/rest/v1/fund_predictions?id=eq.latest",
-                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
-                         "Content-Type": "application/json"},
-                json={"top10": top10_list},
-                timeout=30
-            )
-        except Exception:
-            pass
 
         # 快照（只存有 nav 的新预测）
         try:

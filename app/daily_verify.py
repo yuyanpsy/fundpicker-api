@@ -103,6 +103,9 @@ def verify_old_snapshots(horizon: int = 30, max_batch: int = 2000) -> int:
 
 
 def aggregate_win_rates(horizon: int = 30):
+    """聚合胜率 — 只查最近90天的快照数据，避免全表扫描"""
+    from datetime import timedelta
+    cutoff = (date.today() - timedelta(days=90)).isoformat()
     buckets = [(50, 60), (60, 70), (70, 80), (80, 90), (90, 100)]
     for lo, hi in buckets:
         bucket_key = f"{lo}-{hi}"
@@ -113,10 +116,11 @@ def aggregate_win_rates(horizon: int = 30):
                 f"&probability=gte.{lo}"
                 f"&probability=lt.{hi}"
                 f"&actual_up=not.is.null"
+                f"&snapshot_date=gte.{cutoff}"
                 f"&select=actual_up,actual_return_pct,snapshot_date"
-                f"&limit=50000",
+                f"&limit=10000",
                 headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
-                timeout=60
+                timeout=30
             )
             if resp.status_code != 200:
                 continue

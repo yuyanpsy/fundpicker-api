@@ -13,7 +13,7 @@ from model_trainer import FundPredictor
 from data_collector import (load_nav_data, fetch_fund_nav_from_pingzhongdata,
                             save_single_nav, fetch_fund_rank, DATA_DIR)
 from feature_engineering import compute_features
-from supabase_store import save_predictions, load_predictions
+from supabase_store import save_predictions, load_predictions, load_top10
 from backtest import run_daily_backtest
 
 app = FastAPI(title="FundPicker AI API", version="3.0.0")
@@ -41,14 +41,15 @@ prediction_cache = {
 }
 cache_lock = threading.Lock()
 
-# 启动时从Supabase加载上次的预测结果
-_top10, _all_preds, _updated = load_predictions()
+# 启动时从 Supabase 加载 top10（轻量版 ~3KB，避免全量读取 ~6MB）
+_top10, _updated = load_top10()
 if _top10:
     prediction_cache["top10"] = _top10
-    prediction_cache["all_predictions"] = _all_preds
     prediction_cache["last_update"] = _updated
     prediction_cache["status"] = "done"
-    print(f"从Supabase恢复: {len(_top10)}只TOP10, {len(_all_preds)}只全量")
+    print(f"从Supabase恢复 top10: {len(_top10)}只 (轻量模式，全量数据延迟加载)")
+# all_predictions 暂不加载，需要时再从 Supabase 全量读取
+# 这样每次 Render 重启只消耗 ~3KB 而非 ~6MB
 
 
 def ensure_fund_data(code: str) -> bool:
