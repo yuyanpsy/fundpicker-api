@@ -2,8 +2,9 @@ name: Batch Predict Funds
 
 on:
   schedule:
-    # 北京时间每天 9:00（UTC 1:00），交易日开盘前完成预测
-    - cron: '0 1 * * 1-5'
+    # 北京时间每天 9:00（UTC 1:00）运行
+    # TODO: 数据填满后改回 '0 1 * * 1-5'（仅交易日）
+    - cron: '0 1 * * *'
   workflow_dispatch: # 支持手动触发
 
 jobs:
