@@ -1198,9 +1198,9 @@ FundPicker/
 
 #### 系统运行状态
 - Render Web API：在线运行 ✅（Free 计划）
-- GitHub Actions（批量预测）：每个交易日 9:00 自动运行 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
-- GitHub Actions（每日快照）：每个交易日 17:30 自动存快照 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
-- GitHub Actions（每日对账）：每个交易日 18:00 自动验证预测 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
+- GitHub Actions（批量预测）：每个交易日 9:00 自动运行 ✅（#1 手动测试通过，耗时 36s）
+- GitHub Actions（每日快照）：每个交易日 17:30 自动存快照 ✅（#1 手动测试通过，耗时 28s）
+- GitHub Actions（每日对账）：每个交易日 18:00 自动验证预测 ✅（#1 手动测试通过，耗时 37s）
 - **所有服务自动运行，不依赖本地开发环境，总费用 $0/月**
 
 #### 测试验证记录
@@ -1209,7 +1209,11 @@ FundPicker/
 | 脚本导入测试 | ✅ 全部通过 | daily_verify / daily_snapshot / batch_predict_cron 均无导入错误 |
 | 依赖安装测试 | ✅ 通过 | requirements-cron.txt 中 6 个包安装成功 |
 | 环境变量读取 | ✅ 通过 | `os.environ.get()` 降级默认值逻辑正确 |
-| GitHub Actions 实际运行 | ⏳ 待验证 | 需配置 Secrets 后手动触发 workflow |
+| GitHub Actions — Daily Verify #1 | ✅ 通过 | Success，37s |
+| GitHub Actions — Daily Snapshot #1 | ✅ 通过 | Success，28s |
+| GitHub Actions — Batch Predict Funds #1 | ✅ 通过 | Success，36s |
+
+> 注：三个 workflow 均有 Node.js 20 弃用警告（非阻断），GitHub 强制在 Node.js 24 上运行，不影响功能。后续可升级 actions/checkout@v4 → v5 消除警告。
 
 ### 2026-05-13
 

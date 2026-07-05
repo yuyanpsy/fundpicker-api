@@ -119,15 +119,19 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIs...")
 | `SUPABASE_URL` | `https://edzsmjegnkrbedqpotgu.supabase.co` |
 | `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkenNtamVnbmtyYmVkcXBvdGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDA5NDcsImV4cCI6MjA5MTg3Njk0N30.J1gHxRiRgEBSMtd3WwhmkwiO2bIpNJy2LDsphD0SPQU` |
 
-**5.3 手动触发首次测试**
+#### 5.3 手动触发首次测试（已完成 ✅）
 
-Secrets 配置完成后：
-1. 进入仓库 → **Actions** 标签页
-2. 左侧选择 **Daily Verify**（运行最快，约5分钟）
-3. 右侧点击 **Run workflow** → **Run workflow**
-4. 等待运行完成，查看日志确认无报错
+三个 workflow 已于 2026-07-05 全部手动触发测试通过：
 
-三个 workflow 首次均手动触发验证通过后，定时任务会自动按 schedule 运行。
+| Workflow | Run # | 状态 | 耗时 |
+|----------|-------|------|------|
+| Daily Verify | #1 | ✅ Success | 37s |
+| Daily Snapshot | #1 | ✅ Success | 28s |
+| Batch Predict Funds | #1 | ✅ Success | 36s |
+
+> 注：三个 workflow 均有 Node.js 20 弃用警告（非阻断），后续可升级 `actions/checkout@v4` → `v5` 消除。
+
+定时任务（cron schedule）已生效，将按 schedule 自动运行。
 
 ### 六、监控与运维
 
