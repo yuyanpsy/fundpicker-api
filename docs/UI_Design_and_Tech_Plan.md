@@ -1198,10 +1198,18 @@ FundPicker/
 
 #### 系统运行状态
 - Render Web API：在线运行 ✅（Free 计划）
-- GitHub Actions（批量预测）：每个交易日 9:00 自动运行 ✅
-- GitHub Actions（每日快照）：每个交易日 17:30 自动存快照 ✅
-- GitHub Actions（每日对账）：每个交易日 18:00 自动验证预测 ✅
+- GitHub Actions（批量预测）：每个交易日 9:00 自动运行 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
+- GitHub Actions（每日快照）：每个交易日 17:30 自动存快照 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
+- GitHub Actions（每日对账）：每个交易日 18:00 自动验证预测 ✅（代码已推送，需配置 Secrets 后手动触发首次测试）
 - **所有服务自动运行，不依赖本地开发环境，总费用 $0/月**
+
+#### 测试验证记录
+| 测试项 | 结果 | 说明 |
+|--------|------|------|
+| 脚本导入测试 | ✅ 全部通过 | daily_verify / daily_snapshot / batch_predict_cron 均无导入错误 |
+| 依赖安装测试 | ✅ 通过 | requirements-cron.txt 中 6 个包安装成功 |
+| 环境变量读取 | ✅ 通过 | `os.environ.get()` 降级默认值逻辑正确 |
+| GitHub Actions 实际运行 | ⏳ 待验证 | 需配置 Secrets 后手动触发 workflow |
 
 ### 2026-05-13
 

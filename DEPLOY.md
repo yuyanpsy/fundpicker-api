@@ -93,7 +93,43 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIs...")
 | Render Web Service | 通过 Render Dashboard → Environment 注入 |
 | 本地开发 | 使用默认值（硬编码），或创建 `.env` 文件 |
 
-### 五、监控与运维
+### 五、配置验证与测试
+
+#### 5.1 本地代码验证（已完成 ✅）
+
+| 测试项 | 结果 | 说明 |
+|--------|------|------|
+| `daily_verify.py` 导入 | ✅ 通过 | 语法正确，模块依赖正常 |
+| `daily_snapshot.py` 导入 | ✅ 通过 | 语法正确，模块依赖正常 |
+| `batch_predict_cron.py` 导入 | ✅ 通过 | 模型加载正常，sklearn 兼容 |
+| `requirements-cron.txt` 安装 | ✅ 通过 | pandas/numpy/scikit-learn/joblib/requests/ta 全部安装成功 |
+| 环境变量读取 | ✅ 通过 | `os.environ.get()` 降级到默认值逻辑正确 |
+| 代码推送 GitHub | ✅ 通过 | commit `4e2e8e8` 已推送至 `main` 分支 |
+
+#### 5.2 GitHub Actions 首次运行前配置
+
+**必须完成以下步骤，否则 workflow 会因缺少 Secrets 而失败：**
+
+1. 打开仓库页面：`https://github.com/yuyanpsy/fundpicker-api`
+2. 点击 **Settings** → 左侧 **Secrets and variables** → **Actions**
+3. 点击 **New repository secret**，依次添加：
+
+| Secret 名称 | 值（完整字符串，勿加引号） |
+|-------------|---------------------------|
+| `SUPABASE_URL` | `https://edzsmjegnkrbedqpotgu.supabase.co` |
+| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkenNtamVnbmtyYmVkcXBvdGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDA5NDcsImV4cCI6MjA5MTg3Njk0N30.J1gHxRiRgEBSMtd3WwhmkwiO2bIpNJy2LDsphD0SPQU` |
+
+**5.3 手动触发首次测试**
+
+Secrets 配置完成后：
+1. 进入仓库 → **Actions** 标签页
+2. 左侧选择 **Daily Verify**（运行最快，约5分钟）
+3. 右侧点击 **Run workflow** → **Run workflow**
+4. 等待运行完成，查看日志确认无报错
+
+三个 workflow 首次均手动触发验证通过后，定时任务会自动按 schedule 运行。
+
+### 六、监控与运维
 
 #### 查看运行状态
 
